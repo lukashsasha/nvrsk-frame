@@ -1,4 +1,4 @@
-import React, {useRef, useEffect, useState} from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import addButton from '../images/btn_add.png';
 import addButtonActive from '../images/btn_add_active.png';
 import deleteButton from '../images/btn_delete.png'
@@ -18,7 +18,7 @@ interface UploadedImage {
     y: number;
 }
 
-const CanvasEditor: React.FC<CanvasEditorProps> = ({frame, name1, name2}) => {
+const CanvasEditor: React.FC<CanvasEditorProps> = ({ frame, name1, name2 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const maskImage = useRef<HTMLImageElement | null>(null);
     const addIcons = useRef<(HTMLImageElement | null)[]>([null, null]);
@@ -28,28 +28,72 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({frame, name1, name2}) => {
     const [displayName2, setDisplayName2] = useState('Фамилия Имя Отчество');
     const [uploadedImages, setUploadedImages] = useState<(UploadedImage | null)[]>([null, null]);
     const [dragIndex, setDragIndex] = useState<number | null>(null);
-    const [offset, setOffset] = useState({x: 0, y: 0});
+    const [offset, setOffset] = useState({ x: 0, y: 0 });
     const [hoveredButtonIndex, setHoveredButtonIndex] = useState<number | null>(null);
 
     const windows = useRef([
-        {x: 80, y: 300, w: 200, h: 250},
-        {x: 350, y: 300, w: 200, h: 250}
+        { x: 80, y: 300, w: 200, h: 250 },
+        { x: 350, y: 300, w: 200, h: 250 }
     ]);
 
-    const customClips = [
-        [{x: 17, y: 235}, {x: 287, y: 193}, {x: 341, y: 579}, {x: 68, y: 621}],
-        [{x: 325, y: 222}, {x: 597, y: 257}, {x: 550, y: 648}, {x: 277, y: 610}, {x: 280, y: 595}, {
-            x: 346,
-            y: 586
-        }, {x: 311, y: 312}]
+    const baseWidth = 724;
+    const baseHeight = 1024;
+
+    const relativeClips = [
+        [
+            { x: 16 / baseWidth, y: 253 / baseHeight },
+            { x: 328 / baseWidth, y: 206 / baseHeight },
+            { x: 392 / baseWidth, y: 624 / baseHeight },
+            { x: 79 / baseWidth, y: 672 / baseHeight }
+        ],
+        [
+            { x: 368 / baseWidth, y: 237 / baseHeight },
+            { x: 686 / baseWidth, y: 279 / baseHeight },
+            { x: 631 / baseWidth, y: 697 / baseHeight },
+            { x: 312 / baseWidth, y: 657 / baseHeight },
+            { x: 316 / baseWidth, y: 640 / baseHeight },
+            { x: 394 / baseWidth, y: 626 / baseHeight },
+            { x: 354 / baseWidth, y: 338 / baseHeight }
+        ]
     ];
 
-    const buttonPositions = [
-        {x: 130, y: 350},
-        {x: 390, y: 350}
+    const relativeButtonPositions = [
+        { x: 150 / baseWidth, y: 370 / baseHeight },
+        { x: 450 / baseWidth, y: 370 / baseHeight }
+    ];
+
+    const relativeFioPositions = [
+        { x: 200 / baseWidth, y: 750 / baseHeight },
+        { x: 520 / baseWidth, y: 750 / baseHeight }
     ];
 
     const buttonSize = 100;
+
+    const relativeButtonSize = buttonSize / baseWidth;
+
+
+    const getAbsoluteCoords = (relativeCoords: { x: number, y: number }[], canvasWidth: number, canvasHeight: number) => {
+        return relativeCoords.map(point => ({
+            x: point.x * canvasWidth,
+            y: point.y * canvasHeight
+        }));
+    };
+
+    const getButtonRect = (
+        i: number,
+        canvasWidth: number,
+        canvasHeight: number
+    ) => {
+        const btn = relativeButtonPositions[i];
+        const size = relativeButtonSize * canvasWidth;
+
+        return {
+            x: btn.x * canvasWidth,
+            y: btn.y * canvasHeight,
+            size
+        };
+    };
+
 
     useEffect(() => {
         if (name1.trim()) setDisplayName1(name1);
@@ -84,26 +128,72 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({frame, name1, name2}) => {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        const {width, height} = canvas.getBoundingClientRect();
-        canvas.width = width;
-        canvas.height = height;
 
-        ctx.clearRect(0, 0, width, height);
 
+        // 1. Получаем пропорции маски
+        const maskAspectRatio = mask.width / mask.height;
+
+        // 2. Получаем максимальные доступные размеры (с учётом padding/margins)
+        const maxAvailableWidth = window.innerWidth;
+        const maxAvailableHeight = window.innerHeight;
+
+        // 3. Вычисляем оптимальные размеры Canvas с сохранением пропорций маски
+        let canvasWidth = maxAvailableWidth;
+        let canvasHeight = canvasWidth / maskAspectRatio;
+
+        if (canvasHeight > maxAvailableHeight) {
+            canvasHeight = maxAvailableHeight;
+            canvasWidth = canvasHeight * maskAspectRatio;
+        }
+
+        // 3.1. Ограничиваем размеры до базовых
+        if (canvasWidth > baseWidth) {
+            canvasWidth = baseWidth;
+            canvasHeight = baseWidth / maskAspectRatio;
+        }
+
+        if (canvasHeight > baseHeight) {
+            canvasHeight = baseHeight;
+            canvasWidth = baseHeight * maskAspectRatio;
+        }
+
+        // 4. Устанавливаем вычисленные размеры
+        canvas.style.width = `${canvasWidth}px`;
+        canvas.style.height = `${canvasHeight}px`;
+
+        // 5. Устанавливаем внутренний буфер (с учётом DPI для чёткости)
+        const dpr = window.devicePixelRatio || 1;
+        // const dpr = 1;
+        canvas.width = canvasWidth * dpr;
+        canvas.height = canvasHeight * dpr;
+        ctx.scale(dpr, dpr);
+
+
+        // 6. Очищаем и рисуем фон
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, width, height);
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
+
+        // 7. Отрисовываем содержимое с новыми размерами
         uploadedImages.forEach((item, i) => {
             if (!item) return;
             const win = windows.current[i];
-            const shape = customClips[i];
+
+            const shape = getAbsoluteCoords(relativeClips[i], canvas.width, canvas.height);
 
             ctx.save();
             ctx.beginPath();
             ctx.moveTo(shape[0].x, shape[0].y);
             shape.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
             ctx.closePath();
+
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
             ctx.clip();
+
             const imgAspect = item.img.width / item.img.height;
             const frameAspect = win.w / win.h;
 
@@ -112,13 +202,10 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({frame, name1, name2}) => {
             let dx = item.x;
             let dy = item.y;
 
-// Вписываем изображение в рамку
             if (imgAspect > frameAspect) {
-                // Изображение шире — подгоняем по ширине
                 drawHeight = win.w / imgAspect;
                 dy = item.y + (win.h - drawHeight) / 2;
             } else {
-                // Изображение выше — подгоняем по высоте
                 drawWidth = win.h * imgAspect;
                 dx = item.x + (win.w - drawWidth) / 2;
             }
@@ -127,43 +214,74 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({frame, name1, name2}) => {
             ctx.restore();
         });
 
-        ctx.drawImage(mask, 0, 0, width, height);
+        // 8. Накладываем маску (теперь она точно соответствует Canvas)
+        ctx.drawImage(mask, 0, 0, canvasWidth, canvasHeight);
 
+        // 9. Отрисовываем кнопки
         uploadedImages.forEach((img, i) => {
             if (!img) {
-                const btn = buttonPositions[i];
-                const icon = hoveredButtonIndex === i ? addIconsActive.current[i] : addIcons.current[i];
-                if (icon?.complete) {
-                    ctx.drawImage(icon, btn.x, btn.y, buttonSize, buttonSize);
-                } else {
-                    icon!.onload = () => ctx.drawImage(icon!, btn.x, btn.y, buttonSize, buttonSize);
+
+                const { x, y, size } = getButtonRect(i, canvas.width, canvas.height);
+
+                const icon = hoveredButtonIndex === i
+                    ? addIconsActive.current[i]
+                    : addIcons.current[i];
+
+                // Проверяем, что icon существует и является HTMLImageElement
+                if (icon instanceof HTMLImageElement) {
+                    if (icon.complete) {
+                        // Дополнительная проверка для TypeScript
+                        if (icon.naturalWidth > 0) {
+                            ctx.drawImage(icon, x, y, size, size);
+                        }
+                    } else {
+                        // Явно указываем тип для onload
+                        icon.onload = () => {
+                            ctx.drawImage(icon, x, y, size, size);
+
+                            // Перерисовываем canvas после загрузки иконки
+                            draw();
+                        };
+                    }
                 }
             }
         });
 
+        // 10. Отрисовываем текст
         ctx.fillStyle = 'black';
-        ctx.font = 'bold 30px Arial';
-        const baseY = height - 250;
-        const lineHeight = 35;
 
-        const drawFio = (name: string, x: number) => {
+        const baseFontSize = 30; // исходный размер текста в px
+        const baseLineHeight = 35; // базовый отступ между строками
+        const scaledFontSize = baseFontSize * (canvasHeight / baseHeight);
+        const scaledLineHeight = baseLineHeight * (canvasHeight / baseHeight);
+
+        // применяем масштабированный шрифт
+        ctx.font = `bold ${scaledFontSize}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+
+        const drawFio = (name: string, index: number) => {
+            const pos = relativeFioPositions[index];
+            const x = pos.x * canvasWidth;
+            const y = pos.y * canvasHeight;
+
             const parts = name.trim().split(/\s+/);
-            ctx.textAlign = 'center';
             parts.forEach((line, i) => {
-                if(i <=2){
-                    ctx.fillText(line, x, baseY + i * lineHeight);
-
+                if (i <= 2) {
+                    ctx.fillText(line, x, y + i * scaledLineHeight);
                 }
             });
         };
 
-        drawFio(displayName1, 200);
-        drawFio(displayName2, width - 200);
+        drawFio(displayName1, 0);
+        drawFio(displayName2, 1);
     };
+
 
     useEffect(() => {
         draw();
     }, [displayName1, displayName2, uploadedImages, hoveredButtonIndex]);
+
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -171,12 +289,14 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({frame, name1, name2}) => {
 
         const handleClick = (e: MouseEvent) => {
             const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
 
-            buttonPositions.forEach((btn, i) => {
+
+            relativeButtonPositions.forEach((btn, i) => {
                 if (!uploadedImages[i]) {
-                    if (x >= btn.x && x <= btn.x + buttonSize && y >= btn.y && y <= btn.y + buttonSize) {
+                    const { x, y, size } = getButtonRect(i, canvas.width, canvas.height);
+                    if (clickX >= x && clickX <= x + size && clickY >= y && clickY <= y + size) {
                         const input = document.createElement('input');
                         input.type = 'file';
                         input.accept = 'image/*';
@@ -210,17 +330,18 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({frame, name1, name2}) => {
 
         const handleMouseMove = (e: MouseEvent) => {
             const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
 
             let hovered: number | null = null;
-            buttonPositions.forEach((btn, i) => {
+            relativeButtonPositions.forEach((btn, i) => {
+                const { x, y, size } = getButtonRect(i, canvas.width, canvas.height);
                 if (!uploadedImages[i]) {
                     if (
-                        x >= btn.x &&
-                        x <= btn.x + buttonSize &&
-                        y >= btn.y &&
-                        y <= btn.y + buttonSize
+                        mouseX >= x &&
+                        mouseX <= x + size &&
+                        mouseY >= y &&
+                        mouseY <= y + size
                     ) {
                         hovered = i;
                     }
@@ -254,7 +375,7 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({frame, name1, name2}) => {
                 const win = windows.current[i];
                 if (x >= img.x && x <= img.x + win.w && y >= img.y && y <= img.y + win.h) {
                     setDragIndex(i);
-                    setOffset({x: x - img.x, y: y - img.y});
+                    setOffset({ x: x - img.x, y: y - img.y });
                 }
             });
         };
@@ -293,7 +414,7 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({frame, name1, name2}) => {
         };
     }, [uploadedImages, dragIndex, offset]);
 
-    return <canvas ref={canvasRef} className="canvas" width="600" height="900"/>;
+    return <canvas ref={canvasRef} className="canvas" />;
 };
 
 export default CanvasEditor;
