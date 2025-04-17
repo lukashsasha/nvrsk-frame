@@ -1,15 +1,17 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import addButton from '../images/btn_add.png';
 import addButtonActive from '../images/btn_add_active.png';
 import deleteButton from '../images/btn_delete.png'
 import deleteButtonActive from '../images/btn_delete_active.png'
 import rotateButton from '../images/btn_rotate.png'
 import rotateButtonActive from '../images/btn_rotate_active.png'
+import { FrameData } from '../App';
 
 interface CanvasEditorProps {
-    frame: string;
+    frameData: FrameData;
     name1: string;
     name2: string;
+
 }
 
 interface UploadedImage {
@@ -18,7 +20,12 @@ interface UploadedImage {
     y: number;
 }
 
-const CanvasEditor: React.FC<CanvasEditorProps> = ({ frame, name1, name2 }) => {
+export interface CanvasEditorRef {
+    saveCanvas: () => void;
+}
+
+
+const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const maskImage = useRef<HTMLImageElement | null>(null);
     const addIcons = useRef<(HTMLImageElement | null)[]>([null, null]);
@@ -31,41 +38,18 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ frame, name1, name2 }) => {
     const [offset, setOffset] = useState({ x: 0, y: 0 });
     const [hoveredButtonIndex, setHoveredButtonIndex] = useState<number | null>(null);
 
-    const windows = useRef([
-        { x: 80, y: 300, w: 200, h: 250 },
-        { x: 350, y: 300, w: 200, h: 250 }
-    ]);
+    const {
+        frame,
+        baseWidth,
+        baseHeight,
+        imageSize,
+        relativeClips,
+        relativeButtonPositions,
+        relativeFioPositions,
+        fioFrameSize
+    } = frameData;
 
-    const baseWidth = 724;
-    const baseHeight = 1024;
 
-    const relativeClips = [
-        [
-            { x: 16 / baseWidth, y: 253 / baseHeight },
-            { x: 328 / baseWidth, y: 206 / baseHeight },
-            { x: 392 / baseWidth, y: 624 / baseHeight },
-            { x: 79 / baseWidth, y: 672 / baseHeight }
-        ],
-        [
-            { x: 368 / baseWidth, y: 237 / baseHeight },
-            { x: 686 / baseWidth, y: 279 / baseHeight },
-            { x: 631 / baseWidth, y: 697 / baseHeight },
-            { x: 312 / baseWidth, y: 657 / baseHeight },
-            { x: 316 / baseWidth, y: 640 / baseHeight },
-            { x: 394 / baseWidth, y: 626 / baseHeight },
-            { x: 354 / baseWidth, y: 338 / baseHeight }
-        ]
-    ];
-
-    const relativeButtonPositions = [
-        { x: 150 / baseWidth, y: 370 / baseHeight },
-        { x: 450 / baseWidth, y: 370 / baseHeight }
-    ];
-
-    const relativeFioPositions = [
-        { x: 200 / baseWidth, y: 750 / baseHeight },
-        { x: 520 / baseWidth, y: 750 / baseHeight }
-    ];
 
     const buttonSize = 100;
 
@@ -88,8 +72,8 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ frame, name1, name2 }) => {
         const size = relativeButtonSize * canvasWidth;
 
         return {
-            x: btn.x * canvasWidth,
-            y: btn.y * canvasHeight,
+            x: btn.x * canvasWidth - size / 2,
+            y: btn.y * canvasHeight - size / 2,
             size
         };
     };
@@ -120,7 +104,7 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ frame, name1, name2 }) => {
         });
     }, [frame]);
 
-    const draw = () => {
+    const draw = (options?: { forceBaseSize?: boolean }) => {
         const canvas = canvasRef.current;
         const mask = maskImage.current;
         if (!canvas || !mask) return;
@@ -128,16 +112,10 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ frame, name1, name2 }) => {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-
-
-        // 1. Получаем пропорции маски
         const maskAspectRatio = mask.width / mask.height;
+        let maxAvailableWidth = options?.forceBaseSize ? baseWidth : window.innerWidth;
+        let maxAvailableHeight = options?.forceBaseSize ? baseHeight : window.innerHeight;
 
-        // 2. Получаем максимальные доступные размеры (с учётом padding/margins)
-        const maxAvailableWidth = window.innerWidth;
-        const maxAvailableHeight = window.innerHeight;
-
-        // 3. Вычисляем оптимальные размеры Canvas с сохранением пропорций маски
         let canvasWidth = maxAvailableWidth;
         let canvasHeight = canvasWidth / maskAspectRatio;
 
@@ -146,39 +124,22 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ frame, name1, name2 }) => {
             canvasWidth = canvasHeight * maskAspectRatio;
         }
 
-        // 3.1. Ограничиваем размеры до базовых
-        if (canvasWidth > baseWidth) {
-            canvasWidth = baseWidth;
-            canvasHeight = baseWidth / maskAspectRatio;
-        }
+        if (canvasWidth > baseWidth) canvasWidth = baseWidth;
+        if (canvasHeight > baseHeight) canvasHeight = baseHeight;
 
-        if (canvasHeight > baseHeight) {
-            canvasHeight = baseHeight;
-            canvasWidth = baseHeight * maskAspectRatio;
-        }
-
-        // 4. Устанавливаем вычисленные размеры
         canvas.style.width = `${canvasWidth}px`;
         canvas.style.height = `${canvasHeight}px`;
-
-        // 5. Устанавливаем внутренний буфер (с учётом DPI для чёткости)
-        const dpr = window.devicePixelRatio || 1;
-        // const dpr = 1;
+        const dpr = 1;
         canvas.width = canvasWidth * dpr;
         canvas.height = canvasHeight * dpr;
         ctx.scale(dpr, dpr);
 
-
-        // 6. Очищаем и рисуем фон
         ctx.clearRect(0, 0, canvasWidth, canvasHeight);
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-
-        // 7. Отрисовываем содержимое с новыми размерами
         uploadedImages.forEach((item, i) => {
             if (!item) return;
-            const win = windows.current[i];
 
             const shape = getAbsoluteCoords(relativeClips[i], canvas.width, canvas.height);
 
@@ -186,96 +147,134 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ frame, name1, name2 }) => {
             ctx.beginPath();
             ctx.moveTo(shape[0].x, shape[0].y);
             shape.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
-            ctx.closePath();
-
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = 2;
+            // ctx.closePath();
+            // ctx.strokeStyle = 'black';
+            // ctx.lineWidth = 2;
             ctx.stroke();
-
             ctx.clip();
 
-            const imgAspect = item.img.width / item.img.height;
-            const frameAspect = win.w / win.h;
+            const drawWidth = imageSize.width * canvas.width;
+            const drawHeight = imageSize.height * canvas.height;
 
-            let drawWidth = win.w;
-            let drawHeight = win.h;
-            let dx = item.x;
-            let dy = item.y;
+            const dx = item.x * canvas.width;
+            const dy = item.y * canvas.height;
+
+            const imgAspect = item.img.width / item.img.height;
+            const frameAspect = drawWidth / drawHeight;
+
+            let finalWidth = drawWidth;
+            let finalHeight = drawHeight;
+            let offsetX = dx;
+            let offsetY = dy;
 
             if (imgAspect > frameAspect) {
-                drawHeight = win.w / imgAspect;
-                dy = item.y + (win.h - drawHeight) / 2;
+                finalHeight = drawWidth / imgAspect;
+                offsetY = dy + (drawHeight - finalHeight) / 2;
             } else {
-                drawWidth = win.h * imgAspect;
-                dx = item.x + (win.w - drawWidth) / 2;
+                finalWidth = drawHeight * imgAspect;
+                offsetX = dx + (drawWidth - finalWidth) / 2;
             }
 
-            ctx.drawImage(item.img, dx, dy, drawWidth, drawHeight);
+            ctx.drawImage(item.img, offsetX, offsetY, finalWidth, finalHeight);
             ctx.restore();
         });
 
-        // 8. Накладываем маску (теперь она точно соответствует Canvas)
         ctx.drawImage(mask, 0, 0, canvasWidth, canvasHeight);
 
-        // 9. Отрисовываем кнопки
         uploadedImages.forEach((img, i) => {
             if (!img) {
-
                 const { x, y, size } = getButtonRect(i, canvas.width, canvas.height);
+                const icon = hoveredButtonIndex === i ? addIconsActive.current[i] : addIcons.current[i];
 
-                const icon = hoveredButtonIndex === i
-                    ? addIconsActive.current[i]
-                    : addIcons.current[i];
-
-                // Проверяем, что icon существует и является HTMLImageElement
-                if (icon instanceof HTMLImageElement) {
-                    if (icon.complete) {
-                        // Дополнительная проверка для TypeScript
-                        if (icon.naturalWidth > 0) {
-                            ctx.drawImage(icon, x, y, size, size);
-                        }
-                    } else {
-                        // Явно указываем тип для onload
-                        icon.onload = () => {
-                            ctx.drawImage(icon, x, y, size, size);
-
-                            // Перерисовываем canvas после загрузки иконки
-                            draw();
-                        };
-                    }
+                if (icon instanceof HTMLImageElement && icon.complete && icon.naturalWidth > 0) {
+                    ctx.drawImage(icon, x, y, size, size);
+                } else if (icon) {
+                    icon.onload = () => {
+                        ctx.drawImage(icon, x, y, size, size);
+                        draw();
+                    };
                 }
             }
         });
 
-        // 10. Отрисовываем текст
-        ctx.fillStyle = 'black';
-
-        const baseFontSize = 30; // исходный размер текста в px
-        const baseLineHeight = 35; // базовый отступ между строками
-        const scaledFontSize = baseFontSize * (canvasHeight / baseHeight);
-        const scaledLineHeight = baseLineHeight * (canvasHeight / baseHeight);
-
-        // применяем масштабированный шрифт
-        ctx.font = `bold ${scaledFontSize}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
+        // Текст
 
         const drawFio = (name: string, index: number) => {
             const pos = relativeFioPositions[index];
             const x = pos.x * canvasWidth;
             const y = pos.y * canvasHeight;
-
-            const parts = name.trim().split(/\s+/);
-            parts.forEach((line, i) => {
-                if (i <= 2) {
-                    ctx.fillText(line, x, y + i * scaledLineHeight);
+        
+            const boxWidth = fioFrameSize.width * (canvasWidth / baseWidth);
+            const boxHeight = fioFrameSize.height * (canvasHeight / baseHeight);
+        
+            const maxFontSize = 30 * (canvasHeight / baseHeight);
+            const minFontSize = 10 * (canvasHeight / baseHeight);
+            const lineSpacingRatio = 1.2;
+            const maxLines = 3;
+        
+            // ctx.strokeStyle = 'red';
+            // ctx.lineWidth = 2;
+            // ctx.strokeRect(x - boxWidth / 2, y, boxWidth, boxHeight);
+        
+            const words = name.trim().split(/\s+/);
+            let fontSize = maxFontSize;
+            let lines: string[] = [];
+        
+            const buildLines = (size: number): string[] => {
+                ctx.font = `bold ${size}px Arial`;
+                const result: string[] = [];
+                let currentLine = '';
+        
+                for (const word of words) {
+                    const testLine = currentLine ? `${currentLine} ${word}` : word;
+                    const testWidth = ctx.measureText(testLine).width;
+                    if (testWidth > boxWidth && currentLine) {
+                        result.push(currentLine);
+                        currentLine = word;
+                    } else {
+                        currentLine = testLine;
+                    }
                 }
+        
+                if (currentLine) result.push(currentLine);
+                return result;
+            };
+        
+            // Подбор размера шрифта
+            while (fontSize >= minFontSize) {
+                lines = buildLines(fontSize);
+                const totalHeight = lines.length * fontSize * lineSpacingRatio;
+        
+                const longestLineWidth = Math.max(...lines.map(l => ctx.measureText(l).width));
+        
+                if (totalHeight <= boxHeight && longestLineWidth <= boxWidth && lines.length <= maxLines) {
+                    break;
+                }
+                fontSize -= 1;
+            }
+        
+            ctx.font = `bold ${fontSize}px Arial`;
+            ctx.fillStyle = 'black';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+        
+            const totalTextHeight = lines.length * fontSize * lineSpacingRatio;
+            const startY = y + (boxHeight - totalTextHeight) / 2;
+        
+            lines.forEach((line, i) => {
+                ctx.fillText(line, x, startY + i * fontSize * lineSpacingRatio);
             });
         };
+         
+
+        
+        
 
         drawFio(displayName1, 0);
         drawFio(displayName2, 1);
+
     };
+
 
 
     useEffect(() => {
@@ -283,6 +282,7 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ frame, name1, name2 }) => {
     }, [displayName1, displayName2, uploadedImages, hoveredButtonIndex]);
 
 
+    //Upload buttons
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -310,8 +310,8 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ frame, name1, name2 }) => {
                                 img.onload = () => {
                                     const newImg: UploadedImage = {
                                         img,
-                                        x: windows.current[i].x,
-                                        y: windows.current[i].y
+                                        x: relativeButtonPositions[i].x - imageSize.width / 2,
+                                        y: relativeButtonPositions[i].y - imageSize.height / 2
                                     };
                                     setUploadedImages(prev => {
                                         const updated = [...prev];
@@ -361,6 +361,7 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ frame, name1, name2 }) => {
         };
     }, [uploadedImages, hoveredButtonIndex]);
 
+    //Move images
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -370,31 +371,46 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ frame, name1, name2 }) => {
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
+            const canvasWidth = canvas.width;
+            const canvasHeight = canvas.height;
+
             uploadedImages.forEach((img, i) => {
                 if (!img) return;
-                const win = windows.current[i];
-                if (x >= img.x && x <= img.x + win.w && y >= img.y && y <= img.y + win.h) {
+
+                const imgWidth = imageSize.width * canvasWidth;
+                const imgHeight = imageSize.height * canvasHeight;
+
+                const absX = img.x * canvasWidth;
+                const absY = img.y * canvasHeight;
+
+                if (x >= absX && x <= absX + imgWidth && y >= absY && y <= absY + imgHeight) {
                     setDragIndex(i);
-                    setOffset({ x: x - img.x, y: y - img.y });
+                    setOffset({
+                        x: x - absX,
+                        y: y - absY
+                    });
                 }
             });
         };
 
         const handleMouseMove = (e: MouseEvent) => {
             if (dragIndex === null) return;
+
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
+            const canvasWidth = canvas.width;
+            const canvasHeight = canvas.height;
+
             setUploadedImages(prev => {
                 const updated = [...prev];
                 const img = updated[dragIndex];
-                const win = windows.current[dragIndex];
                 if (img) {
                     updated[dragIndex] = {
                         ...img,
-                        x: x - offset.x,
-                        y: y - offset.y
+                        x: (x - offset.x) / canvasWidth,
+                        y: (y - offset.y) / canvasHeight
                     };
                 }
                 return updated;
@@ -414,7 +430,43 @@ const CanvasEditor: React.FC<CanvasEditorProps> = ({ frame, name1, name2 }) => {
         };
     }, [uploadedImages, dragIndex, offset]);
 
+
+    useImperativeHandle(ref, () => ({
+        saveCanvas: () => {
+            const canvas = canvasRef.current;
+            if (!canvas || !maskImage.current) return;
+
+            const prevWidth = canvas.width;
+            const prevHeight = canvas.height;
+            const prevStyleWidth = canvas.style.width;
+            const prevStyleHeight = canvas.style.height;
+
+            canvas.width = baseWidth;
+            canvas.height = baseHeight;
+            canvas.style.width = `${baseWidth}px`;
+            canvas.style.height = `${baseHeight}px`;
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+            draw({ forceBaseSize: true }); // перерисовать в базовом размере
+
+            const link = document.createElement('a');
+            link.download = 'image.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+
+            // вернуть размеры
+            canvas.width = prevWidth;
+            canvas.height = prevHeight;
+            canvas.style.width = prevStyleWidth;
+            canvas.style.height = prevStyleHeight;
+            draw(); // снова отрисовать под экран
+        }
+    }));
+
     return <canvas ref={canvasRef} className="canvas" />;
-};
+});
 
 export default CanvasEditor;

@@ -3,7 +3,7 @@ import closeButton from '../images/ic_close.png'
 
 interface FrameModalProps {
     frames: string[];
-    onSelect: (frame: string) => void;
+    onSelect: (frame: number) => void;
     onClose: () => void;
 }
 
@@ -15,7 +15,7 @@ const FrameModal: React.FC<FrameModalProps> = ({ frames, onSelect, onClose }) =>
                     <div
                         key={index}
                         className="frchoose_btn"
-                        onClick={() => onSelect(frameSrc)}
+                        onClick={() => onSelect(index)}
                     >
                         <img
                             className="frchoose_img"
