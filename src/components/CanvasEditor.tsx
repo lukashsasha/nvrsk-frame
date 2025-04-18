@@ -267,9 +267,6 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
         };
          
 
-        
-        
-
         drawFio(displayName1, 0);
         drawFio(displayName2, 1);
 
@@ -409,7 +406,7 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
 
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const  y = e.clientY - rect.top;
 
             const canvasWidth = canvas.width;
             const canvasHeight = canvas.height;
@@ -431,23 +428,25 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
         const handleTouchStart = (e: TouchEvent) => {
             if (e.touches.length !== 1) return;
             const { x, y } = getTouchCoords(e.touches[0]);
-    
+        
             uploadedImages.forEach((img, i) => {
                 if (!img) return;
-                const btn = relativeButtonPositions[i];
-                const cx = btn.x * canvas.width;
-                const cy = btn.y * canvas.height;
+        
                 const imgW = frameData.imageSize.width * canvas.width;
                 const imgH = frameData.imageSize.height * canvas.height;
-                const left = cx - imgW / 2;
-                const top = cy - imgH / 2;
-    
-                if (x >= left && x <= left + imgW && y >= top && y <= top + imgH) {
+                const absImgX = img.x * canvas.width;
+                const absImgY = img.y * canvas.height;
+        
+                if (x >= absImgX && x <= absImgX + imgW && y >= absImgY && y <= absImgY + imgH) {
                     setDragIndex(i);
-                    setOffset({ x: x - img.x, y: y - img.y });
+                    setOffset({
+                        x: x - absImgX,
+                        y: y - absImgY
+                    });
                 }
             });
         };
+        
     
         const handleTouchMove = (e: TouchEvent) => {
             if (dragIndex === null || e.touches.length !== 1) return;
@@ -459,8 +458,8 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
                 if (img) {
                     updated[dragIndex] = {
                         ...img,
-                        x: x - offset.x,
-                        y: y - offset.y
+                        x: (x - offset.x) / canvas.width,
+                        y: (y - offset.y) / canvas.height
                     };
                 }
                 return updated;
