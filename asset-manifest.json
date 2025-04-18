@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/nvrsk-frame/static/css/main.616d4b64.css",
-    "main.js": "/nvrsk-frame/static/js/main.69f35e0e.js",
+    "main.js": "/nvrsk-frame/static/js/main.95c597ec.js",
     "static/media/frame_mask_1.png": "/nvrsk-frame/static/media/frame_mask_1.9cc4511dbd3e61105a84.png",
     "static/media/frame_mask_2.png": "/nvrsk-frame/static/media/frame_mask_2.f174621e2419e68be736.png",
     "static/media/tile.png": "/nvrsk-frame/static/media/tile.7e7cc97c018ff91d41e6.png",
@@ -11,10 +11,10 @@
     "static/media/btn_add.png": "/nvrsk-frame/static/media/btn_add.a87e1f5af42c9d788c34.png",
     "index.html": "/nvrsk-frame/index.html",
     "main.616d4b64.css.map": "/nvrsk-frame/static/css/main.616d4b64.css.map",
-    "main.69f35e0e.js.map": "/nvrsk-frame/static/js/main.69f35e0e.js.map"
+    "main.95c597ec.js.map": "/nvrsk-frame/static/js/main.95c597ec.js.map"
   },
   "entrypoints": [
     "static/css/main.616d4b64.css",
-    "static/js/main.69f35e0e.js"
+    "static/js/main.95c597ec.js"
   ]
 }
