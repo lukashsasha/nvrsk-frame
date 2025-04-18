@@ -366,6 +366,17 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
         const canvas = canvasRef.current;
         if (!canvas) return;
 
+        const getTouchCoords = (touch: Touch) => {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+        
+            return {
+                x: (touch.clientX - rect.left) * scaleX,
+                y: (touch.clientY - rect.top) * scaleY
+            };
+        };
+
         const handleMouseDown = (e: MouseEvent) => {
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
@@ -417,16 +428,69 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
             });
         };
 
+        const handleTouchStart = (e: TouchEvent) => {
+            if (e.touches.length !== 1) return;
+            const { x, y } = getTouchCoords(e.touches[0]);
+    
+            uploadedImages.forEach((img, i) => {
+                if (!img) return;
+                const btn = relativeButtonPositions[i];
+                const cx = btn.x * canvas.width;
+                const cy = btn.y * canvas.height;
+                const imgW = frameData.imageSize.width * canvas.width;
+                const imgH = frameData.imageSize.height * canvas.height;
+                const left = cx - imgW / 2;
+                const top = cy - imgH / 2;
+    
+                if (x >= left && x <= left + imgW && y >= top && y <= top + imgH) {
+                    setDragIndex(i);
+                    setOffset({ x: x - img.x, y: y - img.y });
+                }
+            });
+        };
+    
+        const handleTouchMove = (e: TouchEvent) => {
+            if (dragIndex === null || e.touches.length !== 1) return;
+            const { x, y } = getTouchCoords(e.touches[0]);
+    
+            setUploadedImages(prev => {
+                const updated = [...prev];
+                const img = updated[dragIndex];
+                if (img) {
+                    updated[dragIndex] = {
+                        ...img,
+                        x: x - offset.x,
+                        y: y - offset.y
+                    };
+                }
+                return updated;
+            });
+    
+            e.preventDefault(); // отключаем скролл
+        };
+    
+        const handleTouchEnd = () => {
+            setDragIndex(null);
+        };
+
         const handleMouseUp = () => setDragIndex(null);
 
         canvas.addEventListener('mousedown', handleMouseDown);
         window.addEventListener('mousemove', handleMouseMove);
         window.addEventListener('mouseup', handleMouseUp);
 
+        canvas.addEventListener('touchstart', handleTouchStart);
+        window.addEventListener('touchmove', handleTouchMove, { passive: false });
+        window.addEventListener('touchend', handleTouchEnd);
+
         return () => {
             canvas.removeEventListener('mousedown', handleMouseDown);
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
+
+            canvas.removeEventListener('touchstart', handleTouchStart);
+            window.removeEventListener('touchmove', handleTouchMove);
+            window.removeEventListener('touchend', handleTouchEnd);
         };
     }, [uploadedImages, dragIndex, offset]);
 
