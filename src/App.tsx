@@ -34,7 +34,7 @@ function App() {
         frame: frame1,
         baseWidth: 724,
         baseHeight: 1024,
-        imageSize: { width: 300 / 724, height: 200 / 1024 },
+        imageSize: { width: 300 / 724, height: 600 / 1024 },
         relativeClips: [
             [
                 { x: 16 / 724, y: 253 / 1024 },
@@ -67,7 +67,7 @@ function App() {
         frame: frame2,
         baseWidth: 1024,
         baseHeight: 724,
-        imageSize: { width: 300 / 724, height: 500 / 1024 },
+        imageSize: { width: 250 / 724, height: 680 / 1024 },
         relativeClips: [
             [
                 { x: 60 / 724, y: 150 / 1024 },

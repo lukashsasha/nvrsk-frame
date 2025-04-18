@@ -30,6 +30,8 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
     const maskImage = useRef<HTMLImageElement | null>(null);
     const addIcons = useRef<(HTMLImageElement | null)[]>([null, null]);
     const addIconsActive = useRef<(HTMLImageElement | null)[]>([null, null]);
+    const uploadedImageRects = useRef<(null | { x: number, y: number, width: number, height: number })[]>([null, null]);
+
 
     const [displayName1, setDisplayName1] = useState('Фамилия Имя Отчество');
     const [displayName2, setDisplayName2] = useState('Фамилия Имя Отчество');
@@ -37,6 +39,8 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
     const [dragIndex, setDragIndex] = useState<number | null>(null);
     const [offset, setOffset] = useState({ x: 0, y: 0 });
     const [hoveredButtonIndex, setHoveredButtonIndex] = useState<number | null>(null);
+    const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+
 
     const {
         frame,
@@ -175,7 +179,25 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
                 offsetX = dx + (drawWidth - finalWidth) / 2;
             }
 
+            uploadedImageRects.current[i] = {
+                x: offsetX,
+                y: offsetY,
+                width: finalWidth,
+                height: finalHeight
+            };
+
+            if (i === selectedIndex) {
+                ctx.save();
+                ctx.strokeStyle = 'orange';
+                ctx.lineWidth = 3;
+                ctx.fillStyle = 'rgba(255, 255, 0, 0.3)'; // жёлтая полупрозрачная заливка
+                ctx.fillRect(offsetX, offsetY, finalWidth, finalHeight);
+                ctx.strokeRect(offsetX, offsetY, finalWidth, finalHeight);
+                ctx.restore();
+            }
+
             ctx.drawImage(item.img, offsetX, offsetY, finalWidth, finalHeight);
+
             ctx.restore();
         });
 
@@ -203,28 +225,28 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
             const pos = relativeFioPositions[index];
             const x = pos.x * canvasWidth;
             const y = pos.y * canvasHeight;
-        
+
             const boxWidth = fioFrameSize.width * (canvasWidth / baseWidth);
             const boxHeight = fioFrameSize.height * (canvasHeight / baseHeight);
-        
+
             const maxFontSize = 30 * (canvasHeight / baseHeight);
             const minFontSize = 10 * (canvasHeight / baseHeight);
             const lineSpacingRatio = 1.2;
             const maxLines = 3;
-        
+
             // ctx.strokeStyle = 'red';
             // ctx.lineWidth = 2;
             // ctx.strokeRect(x - boxWidth / 2, y, boxWidth, boxHeight);
-        
+
             const words = name.trim().split(/\s+/);
             let fontSize = maxFontSize;
             let lines: string[] = [];
-        
+
             const buildLines = (size: number): string[] => {
                 ctx.font = `bold ${size}px Arial`;
                 const result: string[] = [];
                 let currentLine = '';
-        
+
                 for (const word of words) {
                     const testLine = currentLine ? `${currentLine} ${word}` : word;
                     const testWidth = ctx.measureText(testLine).width;
@@ -235,48 +257,58 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
                         currentLine = testLine;
                     }
                 }
-        
+
                 if (currentLine) result.push(currentLine);
                 return result;
             };
-        
+
             // Подбор размера шрифта
             while (fontSize >= minFontSize) {
                 lines = buildLines(fontSize);
                 const totalHeight = lines.length * fontSize * lineSpacingRatio;
-        
+
                 const longestLineWidth = Math.max(...lines.map(l => ctx.measureText(l).width));
-        
+
                 if (totalHeight <= boxHeight && longestLineWidth <= boxWidth && lines.length <= maxLines) {
                     break;
                 }
                 fontSize -= 1;
             }
-        
+
             ctx.font = `bold ${fontSize}px Arial`;
             ctx.fillStyle = 'black';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
-        
+
             const totalTextHeight = lines.length * fontSize * lineSpacingRatio;
             const startY = y + (boxHeight - totalTextHeight) / 2;
-        
+
             lines.forEach((line, i) => {
                 ctx.fillText(line, x, startY + i * fontSize * lineSpacingRatio);
             });
         };
-         
+
 
         drawFio(displayName1, 0);
         drawFio(displayName2, 1);
 
+        if (selectedIndex !== null && uploadedImageRects.current[selectedIndex]) {
+            const rect = uploadedImageRects.current[selectedIndex]!;
+            ctx.save();
+            ctx.strokeStyle = 'orange';
+            ctx.lineWidth = 3;
+            ctx.fillStyle = 'rgba(255, 255, 0, 0.3)'; // жёлтая полупрозрачная заливка
+            ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+            ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+            ctx.restore();
+        }
     };
 
 
 
     useEffect(() => {
         draw();
-    }, [displayName1, displayName2, uploadedImages, hoveredButtonIndex]);
+    }, [displayName1, displayName2, uploadedImages, hoveredButtonIndex, selectedIndex]);
 
 
     //Upload buttons
@@ -323,6 +355,33 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
                     }
                 }
             });
+
+            let found = false;
+
+            uploadedImages.forEach((img, i) => {
+                if (!img) return;
+
+                const rect = uploadedImageRects.current[i];
+                if (!rect) return;
+
+                const { x, y, width, height } = rect;
+
+                if (
+                    clickX >= x &&
+                    clickX <= x + width &&
+                    clickY >= y &&
+                    clickY <= y + height
+                ) {
+
+                    setSelectedIndex(i);
+                    found = true;
+                }
+            });
+
+            if (!found) {
+                setSelectedIndex(null);
+            }
+
         };
 
         const handleMouseMove = (e: MouseEvent) => {
@@ -367,7 +426,7 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
             const scaleY = canvas.height / rect.height;
-        
+
             return {
                 x: (touch.clientX - rect.left) * scaleX,
                 y: (touch.clientY - rect.top) * scaleY
@@ -385,14 +444,15 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
             uploadedImages.forEach((img, i) => {
                 if (!img) return;
 
-                const imgWidth = imageSize.width * canvasWidth;
-                const imgHeight = imageSize.height * canvasHeight;
-
                 const absX = img.x * canvasWidth;
                 const absY = img.y * canvasHeight;
 
-                if (x >= absX && x <= absX + imgWidth && y >= absY && y <= absY + imgHeight) {
+                const rect = uploadedImageRects.current[i];
+                if (!rect) return;
+
+                if (x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height) {
                     setDragIndex(i);
+                    setSelectedIndex(i)
                     setOffset({
                         x: x - absX,
                         y: y - absY
@@ -406,10 +466,12 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
 
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
-            const  y = e.clientY - rect.top;
+            const y = e.clientY - rect.top;
 
             const canvasWidth = canvas.width;
             const canvasHeight = canvas.height;
+
+            setSelectedIndex(dragIndex)
 
             setUploadedImages(prev => {
                 const updated = [...prev];
@@ -428,17 +490,21 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
         const handleTouchStart = (e: TouchEvent) => {
             if (e.touches.length !== 1) return;
             const { x, y } = getTouchCoords(e.touches[0]);
-        
+
+
             uploadedImages.forEach((img, i) => {
                 if (!img) return;
-        
-                const imgW = frameData.imageSize.width * canvas.width;
-                const imgH = frameData.imageSize.height * canvas.height;
+
                 const absImgX = img.x * canvas.width;
                 const absImgY = img.y * canvas.height;
-        
-                if (x >= absImgX && x <= absImgX + imgW && y >= absImgY && y <= absImgY + imgH) {
+
+                const rect = uploadedImageRects.current[i];
+                if (!rect) return;
+
+
+                if (x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height) {
                     setDragIndex(i);
+                    setSelectedIndex(i);
                     setOffset({
                         x: x - absImgX,
                         y: y - absImgY
@@ -446,12 +512,14 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
                 }
             });
         };
-        
-    
+
+
         const handleTouchMove = (e: TouchEvent) => {
             if (dragIndex === null || e.touches.length !== 1) return;
             const { x, y } = getTouchCoords(e.touches[0]);
-    
+
+            setSelectedIndex(dragIndex)
+
             setUploadedImages(prev => {
                 const updated = [...prev];
                 const img = updated[dragIndex];
@@ -464,10 +532,10 @@ const CanvasEditor = forwardRef(({ frameData, name1, name2 }: CanvasEditorProps,
                 }
                 return updated;
             });
-    
+
             e.preventDefault(); // отключаем скролл
         };
-    
+
         const handleTouchEnd = () => {
             setDragIndex(null);
         };
